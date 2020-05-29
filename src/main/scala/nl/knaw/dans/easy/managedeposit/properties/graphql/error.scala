@@ -13,13 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package nl.knaw.dans.easy.managedeposit.fixture
+package nl.knaw.dans.easy.managedeposit.properties.graphql
 
-import org.scalatest.{ Inside, OptionValues, TryValues }
-import org.scalatest.enablers.Existence
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
-trait TestSupportFixture extends AnyFlatSpec with Matchers with OptionValues with TryValues with Inside {
-  implicit def existenceOfFile[FILE <: better.files.File]: Existence[FILE] = _.exists
+object error {
+  abstract class GraphQLError(val msg: String) extends Exception(msg)
+  case class UnexpectedResponseCode(code: Int, body: String) extends GraphQLError(s"GraphQL service returned code $code with message: $body")
+  case class GraphQLQueryError(errors: List[String]) extends GraphQLError(s"Error in GraphQL query: ${ errors.mkString("[", ", ", "]") }")
+  case object GraphQLServiceUnavailable extends GraphQLError("GraphQL service is unavailable")
 }

@@ -13,13 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package nl.knaw.dans.easy.managedeposit.fixture
+package nl.knaw.dans.easy.managedeposit
 
-import org.scalatest.{ Inside, OptionValues, TryValues }
-import org.scalatest.enablers.Existence
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
+package object properties {
 
-trait TestSupportFixture extends AnyFlatSpec with Matchers with OptionValues with TryValues with Inside {
-  implicit def existenceOfFile[FILE <: better.files.File]: Existence[FILE] = _.exists
+  case class DepositDoesNotExist(depositId: DepositId) extends Exception(s"Deposit $depositId does not exist")
+  case class NoStateForDeposit(depositId: DepositId) extends Exception(s"No state available for deposit $depositId")
+  case class DatasetDoesNotExist(datasetId: DatasetId) extends Exception(s"Dataset $datasetId does not exist")
 }

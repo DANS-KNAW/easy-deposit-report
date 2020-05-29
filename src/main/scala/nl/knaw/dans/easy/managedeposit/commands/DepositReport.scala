@@ -19,7 +19,8 @@ import java.io.PrintStream
 
 import better.files.File
 import nl.knaw.dans.easy.managedeposit._
-import nl.knaw.dans.easy.managedeposit.properties.{ DepositPropertiesRepository, FileDepositProperties }
+import nl.knaw.dans.easy.managedeposit.properties.{ DepositPropertiesRepository, FileDepositProperties, FileSystemDeposit }
+import nl.knaw.dans.lib.error._
 
 import scala.util.Try
 
@@ -28,7 +29,7 @@ class DepositReport(depositPropertiesFactory: DepositPropertiesRepository)
 
   def summary(depositor: Option[DepositorId], datamanager: Option[Datamanager], age: Option[Age]): Try[String] = {
     for {
-      depositInfos <- depositPropertiesFactory.listReportData(depositor, datamanager, age)
+      depositInfos <- depositPropertiesFactory.getSummaryReportData(depositor, datamanager, age)
       _ <- ReportGenerator.outputSummary(depositInfos)
     } yield "End of summary report."
   }
@@ -47,12 +48,21 @@ class DepositReport(depositPropertiesFactory: DepositPropertiesRepository)
     } yield "End of error report."
   }
 
+  def createStorageReport(location: File): Try[String] = {
+    Try {
+      location.list
+        .toStream
+        .collect { case file if file.isDirectory => FileSystemDeposit(file, Location.UNKNOWN).getStorageInformation.unsafeGetOrThrow }
+    }.flatMap(ReportGenerator.outputStorageReport)
+      .map(_ => "End of storage report.")
+  }
+
   def createRawReport(location: File): Try[String] = {
     ReportGenerator.outputRawReport {
       makeCompleteTable {
         location.list
           .toStream
-          .collect { case file if file.isDirectory => new FileDepositProperties(file, "").properties }
+          .collect { case file if file.isDirectory => new FileDepositProperties(file, Location.UNKNOWN).properties }
       }
     } map (_ => "End of raw report.")
   }

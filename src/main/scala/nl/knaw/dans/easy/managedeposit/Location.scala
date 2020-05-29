@@ -13,13 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package nl.knaw.dans.easy.managedeposit.fixture
+package nl.knaw.dans.easy.managedeposit
 
-import org.scalatest.{ Inside, OptionValues, TryValues }
-import org.scalatest.enablers.Existence
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
+object Location extends Enumeration {
+  type Location = Value
 
-trait TestSupportFixture extends AnyFlatSpec with Matchers with OptionValues with TryValues with Inside {
-  implicit def existenceOfFile[FILE <: better.files.File]: Existence[FILE] = _.exists
+  // @formatter:off
+  val SWORD2              : Value = Value("SWORD2")
+  val INGEST_FLOW         : Value = Value("INGEST_FLOW")
+  val INGEST_FLOW_ARCHIVED: Value = Value("INGEST_FLOW_ARCHIVED")
+  val UNKNOWN             : Value = Value("UNKNOWN")
+  // @formatter:on
 }

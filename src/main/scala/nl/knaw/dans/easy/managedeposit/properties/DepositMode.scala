@@ -13,13 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package nl.knaw.dans.easy.managedeposit.fixture
+package nl.knaw.dans.easy.managedeposit.properties
 
-import org.scalatest.{ Inside, OptionValues, TryValues }
-import org.scalatest.enablers.Existence
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
-trait TestSupportFixture extends AnyFlatSpec with Matchers with OptionValues with TryValues with Inside {
-  implicit def existenceOfFile[FILE <: better.files.File]: Existence[FILE] = _.exists
+object DepositMode extends Enumeration {
+  type DepositMode = Value
+  val FILE, SERVICE, BOTH = Value
 }

@@ -16,7 +16,10 @@
 package nl.knaw.dans.easy.managedeposit.properties
 
 import better.files.File
+import nl.knaw.dans.easy.managedeposit.Location.Location
+import nl.knaw.dans.easy.managedeposit.State.State
 import nl.knaw.dans.easy.managedeposit._
+import nl.knaw.dans.easy.managedeposit.properties.DepositPropertiesRepository.SummaryReportData
 import nl.knaw.dans.lib.error._
 import nl.knaw.dans.lib.logging.DebugEnhancedLogging
 
@@ -25,21 +28,52 @@ import scala.util.{ Failure, Success, Try }
 class FileDepositPropertiesRepository(sword2DepositsDir: File,
                                       ingestFlowInbox: File,
                                       ingestFlowInboxArchived: Option[File],
-                                  )(implicit dansDoiPrefixes: List[String]) extends DepositPropertiesRepository with DebugEnhancedLogging {
+                                     )(implicit dansDoiPrefixes: List[String]) extends DepositPropertiesRepository with DebugEnhancedLogging {
 
-  private def listDeposits(dir: File, location: String): Stream[FileDepositProperties] = {
+  private def listDeposits(dir: File, location: Location): Stream[FileDepositProperties] = {
     dir.list.toStream
       .collect { case file if file.isDirectory => new FileDepositProperties(file, location) }
+  }
+
+  override def load(depositId: DepositId): Try[DepositProperties] = {
+    // @formatter:off
+    (
+      (sword2DepositsDir -> Location.SWORD2) #::
+        (ingestFlowInbox -> Location.INGEST_FLOW) #::
+        ingestFlowInboxArchived.map(_ -> Location.INGEST_FLOW_ARCHIVED).toStream
+    )
+    // @formatter:on
+      .map { case (dir, location) => (dir / depositId) -> location }
+      .collectFirst { case (deposit, location) if deposit.exists => Success(new FileDepositProperties(deposit, location)) }
+      .getOrElse(Failure(DepositDoesNotExist(depositId)))
+  }
+
+  override def getSummaryReportData(depositor: Option[DepositorId],
+                                    datamanager: Option[Datamanager],
+                                    age: Option[Age],
+                                   ): Try[SummaryReportData] = Try {
+    SummaryReportData(
+      listDeposits(sword2DepositsDir, Location.SWORD2)
+        .append(listDeposits(ingestFlowInbox, Location.INGEST_FLOW))
+        .append(ingestFlowInboxArchived.map(listDeposits(_, Location.INGEST_FLOW_ARCHIVED)).getOrElse(Stream.empty))
+        .withFilter(_.depositIsReadable)
+        .withFilter(_.hasDepositor(depositor))
+        .withFilter(_.hasDatamanager(datamanager))
+        .withFilter(_.isOlderThan(age))
+        .flatMap(_.getStateLabel.unsafeGetOrThrow)
+        .groupBy(identity)
+        .mapValues(_.length)
+    )
   }
 
   override def listReportData(depositor: Option[DepositorId],
                               datamanager: Option[Datamanager],
                               age: Option[Age],
                              ): Try[Stream[DepositInformation]] = Try {
-    listDeposits(sword2DepositsDir, "SWORD2")
-      .append(listDeposits(ingestFlowInbox, "INGEST_FLOW"))
-      .append(ingestFlowInboxArchived.map(listDeposits(_, "INGEST_FLOW_ARCHIVED")).getOrElse(Stream.empty))
-      .withFilter(_.isValidDeposit)
+    listDeposits(sword2DepositsDir, Location.SWORD2)
+      .append(listDeposits(ingestFlowInbox, Location.INGEST_FLOW))
+      .append(ingestFlowInboxArchived.map(listDeposits(_, Location.INGEST_FLOW_ARCHIVED)).getOrElse(Stream.empty))
+      .withFilter(_.depositIsReadable)
       .withFilter(_.hasDepositor(depositor))
       .withFilter(_.hasDatamanager(datamanager))
       .withFilter(_.isOlderThan(age))
@@ -47,24 +81,33 @@ class FileDepositPropertiesRepository(sword2DepositsDir: File,
       .sortBy(_.creationTimestamp)
   }
 
-  override def findByDatasetId(datasetId: DatasetId): Try[DepositProperties] = {
-    listDeposits(ingestFlowInbox, "INGEST_FLOW")
+  override def getCurationParametersByDatasetId(datasetId: DatasetId): Try[(DepositId, Option[State])] = {
+    listDeposits(ingestFlowInbox, Location.INGEST_FLOW)
       .map(props => props.validateUserCanReadTheDepositDirectoryAndTheDepositProperties().map(_ => props))
       .collectFirst {
         case f @ Failure(_) => f
         case s @ Success(props) if props.getFedoraIdentifier.fold(_ => false, _.contains(datasetId)) => s
       }
       .getOrElse(Failure(new IllegalArgumentException(s"No deposit found for datatsetId $datasetId")))
+      .flatMap(props => {
+        for {
+          depositId <- props.getDepositId
+          stateLabel <- props.getStateLabel
+        } yield depositId -> stateLabel
+      })
   }
 
-  override def listDepositsToBeCleaned(deleteParams: DeleteParameters): Try[Stream[DepositProperties]] = Try {
-    listDeposits(sword2DepositsDir, "SWORD2")
-      .append(listDeposits(ingestFlowInbox, "INGEST_FLOW"))
-      .append(ingestFlowInboxArchived.map(listDeposits(_, "INGEST_FLOW_ARCHIVED")).getOrElse(Stream.empty))
-      .withFilter(_.isValidDeposit)
-      .withFilter(_.hasDepositor(deleteParams.filterOnDepositor))
-      .withFilter(_.depositAgeIsLargerThanRequiredAge(deleteParams.age))
-      .withFilter(_.hasState(deleteParams.state))
+  override def listDepositsToBeCleaned(filterOnDepositor: Option[DepositorId],
+                                       filterOnAge: Age,
+                                       filterOnState: State,
+                                      ): Try[Stream[DepositProperties with FileSystemDeposit]] = Try {
+    listDeposits(sword2DepositsDir, Location.SWORD2)
+      .append(listDeposits(ingestFlowInbox, Location.INGEST_FLOW))
+      .append(ingestFlowInboxArchived.map(listDeposits(_, Location.INGEST_FLOW_ARCHIVED)).getOrElse(Stream.empty))
+      .withFilter(_.depositIsReadable)
+      .withFilter(_.hasDepositor(filterOnDepositor))
+      .withFilter(_.depositAgeIsLargerThanRequiredAge(filterOnAge))
+      .withFilter(_.hasState(filterOnState))
       .map(identity)
   }
 }

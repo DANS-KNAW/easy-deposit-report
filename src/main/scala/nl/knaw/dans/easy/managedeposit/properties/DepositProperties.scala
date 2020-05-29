@@ -15,8 +15,8 @@
  */
 package nl.knaw.dans.easy.managedeposit.properties
 
+import nl.knaw.dans.easy.managedeposit.DepositInformation
 import nl.knaw.dans.easy.managedeposit.State.State
-import nl.knaw.dans.easy.managedeposit.{ DeleteParameters, DepositInformation }
 
 import scala.util.Try
 
@@ -24,11 +24,11 @@ trait DepositProperties {
 
   def properties: Map[String, String]
 
-  def getDepositId: Try[String]
+  def setState(label: State, description: String): Try[Unit]
 
-  def getStateLabel: Try[Option[State]]
+  def getDepositInformation(implicit dansDoiPrefixes: List[String]): Try[DepositInformation]
 
   def setCurationParameters(dansDoiRegistered: Boolean, newState: State, newDescription: String): Try[Unit]
 
-  def deleteDeposit(deleteParams: DeleteParameters)(implicit dansDoiPrefixes: List[String]): Try[Option[DepositInformation]]
+  def deleteDepositProperties(): Try[Unit]
 }
